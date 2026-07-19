@@ -144,6 +144,7 @@ cruxeval = ["torch"]
 humaneval = ["fire"]
 humanevalplus = ["fire"]
 ifeval = ["nltk", "langdetect", "absl-py", "immutabledict"]
+ifbench = ["nltk", "emoji", "syllapy"]
 # LiveBench loads fastchat's model adapter (torch, psutil, accelerate via fschat), a
 # vendored IFEval judge (langdetect, immutabledict, nltk), and its vendored lcb_runner
 # code-exec grader imports pyext at module load; the penfever py3 fork is the only pyext
@@ -202,7 +203,7 @@ olympiadbench = []
 # (uv expands `evalchemy[...]` against this project's own extras), the same shape lm-eval
 # ships its `tasks` union in. `uv sync --extra benchmarks` gives you the whole tree.
 benchmarks = [
-    "evalchemy[aime24,aime25,aiw,amc23,bigcodebench,codeelo,codeforces,cruxeval,gpqadiamond,hle,hmmt,humaneval,humanevalplus,ifeval,jeebench,livebench,livecodebench,livecodebenchv5,livecodebenchv5-official,math500,mbpp,mbppplus,mmlupro,mtbench,mixeval,multiple,olympiadbench,repobench,swebench,wildbench,alpaca-eval,zeroeval]",
+    "evalchemy[aime24,aime25,aiw,amc23,bigcodebench,codeelo,codeforces,cruxeval,gpqadiamond,hle,hmmt,humaneval,humanevalplus,ifbench,ifeval,jeebench,livebench,livecodebench,livecodebenchv5,livecodebenchv5-official,math500,mbpp,mbppplus,mmlupro,mtbench,mixeval,multiple,olympiadbench,repobench,swebench,wildbench,alpaca-eval,zeroeval]",
 ]
 
 # --- Marin `marin-serve` (Iris) provider for the runner (eval/serve_eval/) -------
