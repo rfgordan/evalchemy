@@ -111,6 +111,8 @@ class ZeroEvalBenchmark(BaseBenchmark):
         breakdown = {}
         for condition, items in sorted(by_condition.items()):
             breakdown[f"gsm-robust:{condition}"] = acc(items)
+            no_answer = sum(1 for i in items if i["matched"] == "No answer extracted")
+            breakdown[f"gsm-robust:{condition}_no_answer"] = 100.0 * no_answer / len(items)
             changed = [i for i in items if i.get("changed")]
             if changed and len(changed) != len(items):
                 breakdown[f"gsm-robust:{condition}_changed_only"] = acc(changed)
