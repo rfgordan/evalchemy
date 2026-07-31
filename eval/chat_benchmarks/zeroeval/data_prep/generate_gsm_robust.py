@@ -57,9 +57,12 @@ def main() -> None:
     OUT_PATH.parent.mkdir(exist_ok=True)
     with open(clean_path, "w") as f:
         for item in dataset:
-            f.write(json.dumps(
-                {"id": item["id"], "question": item["question"], "answer": item["answer"]},
-                ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {"id": item["id"], "question": item["question"], "answer": item["answer"]}, ensure_ascii=False
+                )
+                + "\n"
+            )
     print(f"wrote {clean_path}: {len(dataset)} items")
     assigned = assign_conditions(len(dataset), args.seed, args.perturbations_per_item)
 
@@ -78,12 +81,11 @@ def main() -> None:
                         "answer": item["answer"],
                         "changed": True,
                         "number_words_affected": False,
-                        "history_train_indices": (idxs := history_indices(
-                            n_train, ind, HISTORY_CONDITIONS[condition], args.seed
-                        )),
+                        "history_train_indices": (
+                            idxs := history_indices(n_train, ind, HISTORY_CONDITIONS[condition], args.seed)
+                        ),
                         "history_exchanges": [
-                            {"question": train[i]["question"], "answer": train[i]["answer"]}
-                            for i in idxs
+                            {"question": train[i]["question"], "answer": train[i]["answer"]} for i in idxs
                         ],
                     }
                 else:

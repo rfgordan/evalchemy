@@ -24,7 +24,6 @@ class ZeroEvalConfig:
     end_index: int = -1
 
 
-
 class ZeroEvalBenchmark(BaseBenchmark):
     """
     ZeroEval benchmark for a number of tasks and benchmarks.
@@ -93,8 +92,6 @@ class ZeroEvalBenchmark(BaseBenchmark):
         except Exception as e:
             self.logger.error(f"Error loading dataset for task {data_name}: {e}")
             raise e
-
-
 
     @staticmethod
     def _gsm_robust_breakdown(parsed_results: List[Dict[str, Any]]) -> Dict[str, float]:
