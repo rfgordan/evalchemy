@@ -151,7 +151,12 @@ def apply() -> bool:
                 chunks(ctxlens, n=self._batch_size),
             ):
                 request_kwargs = dict(kwargs)
-                if generate:
+                if generate and self.tokenizer is None:
+                    # Untokenized API backends (e.g. openai-chat-completions with
+                    # tokenized_requests=False) have no tokenizer to count with;
+                    # the endpoint enforces its own context limit.
+                    pass
+                elif generate:
                     # This is the one shared seam for lm-eval-native and every
                     # Evalchemy benchmark: the actual text/chat payload exists,
                     # but no HTTP request has been issued yet. ``max_length``
