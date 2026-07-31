@@ -1,4 +1,4 @@
-"""Generate the static gsm-robust dataset (data/gsm_robust.jsonl).
+"""Generate the static gsm-robust datasets (data/gsm_robust.jsonl + data/gsm_clean.jsonl).
 
 The checked-in JSONL is the exact realization the task runs, so reviewers can
 read every perturbed item and diffs stay legible. Regenerate (only when the
@@ -15,10 +15,14 @@ Each line is one instance:
     answer                gold answer, verbatim from zero-eval
     changed               question != original_question
     number_words_affected spoken-number homophone swap occurred
-    history_train_indices openai/gsm8k train indices whose Q/A pairs are
-                          prepended as prior chat turns (history conditions
-                          only, else null); content is materialized at load
-                          so the file stays reviewable in size
+    history_train_indices openai/gsm8k train indices for provenance
+                          (history conditions only, else null)
+    history_exchanges     the exact prepended Q/A pairs, embedded so the
+                          benchmark runs fully offline
+
+data/gsm_clean.jsonl is the unperturbed companion (id, question, answer) used
+as the clean reference by the gsm-clean task, so the paired comparison is
+fully static like the other checked-in Tier-2 benchmark files.
 
 Requires the zeroeval extra plus `cmudict` (homophone condition).
 """
@@ -46,7 +50,17 @@ def main() -> None:
     args = parser.parse_args()
 
     dataset = load_dataset("yuchenlin/zero-eval", "gsm", split="test")
-    n_train = len(load_dataset("openai/gsm8k", "main", split="train"))
+    train = load_dataset("openai/gsm8k", "main", split="train")
+    n_train = len(train)
+
+    clean_path = OUT_PATH.parent / "gsm_clean.jsonl"
+    OUT_PATH.parent.mkdir(exist_ok=True)
+    with open(clean_path, "w") as f:
+        for item in dataset:
+            f.write(json.dumps(
+                {"id": item["id"], "question": item["question"], "answer": item["answer"]},
+                ensure_ascii=False) + "\n")
+    print(f"wrote {clean_path}: {len(dataset)} items")
     assigned = assign_conditions(len(dataset), args.seed, args.perturbations_per_item)
 
     OUT_PATH.parent.mkdir(exist_ok=True)
@@ -64,9 +78,13 @@ def main() -> None:
                         "answer": item["answer"],
                         "changed": True,
                         "number_words_affected": False,
-                        "history_train_indices": history_indices(
+                        "history_train_indices": (idxs := history_indices(
                             n_train, ind, HISTORY_CONDITIONS[condition], args.seed
-                        ),
+                        )),
+                        "history_exchanges": [
+                            {"question": train[i]["question"], "answer": train[i]["answer"]}
+                            for i in idxs
+                        ],
                     }
                 else:
                     meta = perturb_question(item["question"], condition, args.seed + ind)
@@ -80,6 +98,7 @@ def main() -> None:
                         "changed": meta["changed"],
                         "number_words_affected": meta["number_words_affected"],
                         "history_train_indices": None,
+                        "history_exchanges": None,
                     }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 n_lines += 1

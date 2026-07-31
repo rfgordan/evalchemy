@@ -51,6 +51,8 @@ class ZeroEvalBenchmark(BaseBenchmark):
         """
         if data_name == "gsm-robust":
             return self._load_gsm_robust()
+        if data_name == "gsm-clean":
+            return self._load_gsm_clean()
         try:
             chat_history = []
             id_strs = []
@@ -117,25 +119,51 @@ class ZeroEvalBenchmark(BaseBenchmark):
                 breakdown[f"gsm-robust:{condition}_number_words"] = acc(numword)
         return breakdown
 
+    def _load_gsm_clean(self) -> Tuple[List[str], List[str], List[Dict[str, Any]], Dict[str, Any]]:
+        """Static unperturbed companion of gsm-robust (data/gsm_clean.jsonl)."""
+        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gsm_clean.jsonl")
+        with open(data_file) as f:
+            records = [json.loads(line) for line in f]
+        if self.debug:
+            records = records[:10]
+            self.logger.info(f"Debug mode: using {len(records)} instances")
+
+        prompt_generation_args = Namespace(run_name="")
+        chat_history, id_strs, extracted_chats, metadata = [], [], [], {}
+        for record in records:
+            id_strs.append(record["id"])
+            prompt = prompt_generation("gsm", record, prompt_generation_args)
+            extracted_chats.append([{"content": prompt, "role": "user"}])
+            chat_history.append([prompt])
+            for key, value in record.items():
+                metadata.setdefault(key, []).append(value)
+
+        if self.config.end_index < 0:
+            self.config.end_index = len(id_strs)
+        slice_range = slice(self.config.start_index, self.config.end_index)
+        return (
+            id_strs[slice_range],
+            chat_history[slice_range],
+            extracted_chats[slice_range],
+            {k: v[slice_range] for k, v in metadata.items()},
+        )
+
     def _load_gsm_robust(self) -> Tuple[List[str], List[str], List[Dict[str, Any]], Dict[str, Any]]:
         """gsm with seeded meaning-preserving perturbations (marin-community/marin#7776).
 
         Instances come verbatim from the checked-in static realization
         (data/gsm_robust.jsonl, produced by data_prep/generate_gsm_robust.py):
         noise conditions carry a perturbed question; history conditions keep
-        the question verbatim and prepend unrelated GSM8K train-split
-        exchanges (materialized here from stored indices) as prior chat
-        turns. The unmodified `gsm` task is the clean reference.
+        the question verbatim and prepend the embedded unrelated train-split
+        exchanges as prior chat turns. The static gsm-clean task is the
+        paired clean reference; no network access is needed.
         """
-        from datasets import load_dataset as hf_load_dataset
-
         data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gsm_robust.jsonl")
         with open(data_file) as f:
             records = [json.loads(line) for line in f]
         if self.debug:
             records = records[:10]
             self.logger.info(f"Debug mode: using {len(records)} instances")
-        train = hf_load_dataset("openai/gsm8k", "main", split="train")
 
         prompt_generation_args = Namespace(run_name="")
         chat_history, id_strs, extracted_chats, metadata = [], [], [], {}
@@ -143,12 +171,14 @@ class ZeroEvalBenchmark(BaseBenchmark):
             id_strs.append(record["id"])
             prompt = prompt_generation("gsm", record, prompt_generation_args)
             history = []
-            for i in record["history_train_indices"] or []:
-                history.append({"role": "user", "content": train[i]["question"]})
-                history.append({"role": "assistant", "content": train[i]["answer"]})
+            for exchange in record.get("history_exchanges") or []:
+                history.append({"role": "user", "content": exchange["question"]})
+                history.append({"role": "assistant", "content": exchange["answer"]})
             extracted_chats.append(history + [{"content": prompt, "role": "user"}])
             chat_history.append([prompt])
             for key, value in record.items():
+                if key == "history_exchanges":
+                    continue
                 if key == "history_train_indices":
                     key, value = "history_messages", 2 * len(value or [])
                 metadata.setdefault(key, []).append(value)
@@ -257,7 +287,7 @@ class ZeroEvalBenchmark(BaseBenchmark):
                     eval_results[f"{task}_cell_acc"] = float(result["Cell Acc"])
                 else:
                     # Handle other tasks (numersense-v2, crux, math-l5)
-                    math_tasks = ["numersense-v2", "math-l5", "gsm", "gsm-robust"]
+                    math_tasks = ["numersense-v2", "math-l5", "gsm", "gsm-clean", "gsm-robust"]
                     eval_func = math_eval_model if task in math_tasks else crux_eval_model
                     result, parsed_results = eval_func("%", filepath)
                     eval_results[task] = float(result["Acc"])

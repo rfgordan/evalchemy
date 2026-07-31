@@ -3,7 +3,7 @@ irrelevant chat history (marin-community/marin#7776, wish-list
 marin-community/marin#7090 item 16).
 
 Runs two zeroeval tasks in one invocation:
-  gsm         -- the unmodified chat-mode GSM8K (clean reference)
+  gsm-clean   -- the static unperturbed companion (clean reference)
   gsm-robust  -- the checked-in perturbed realization
                  (zeroeval/data/gsm_robust.jsonl): six seeded
                  meaning-preserving noise conditions plus prior-turn
@@ -24,7 +24,7 @@ from eval.chat_benchmarks.zeroeval.eval_instruct import ZeroEvalBenchmark, ZeroE
 class GSMRobustBenchmark(ZeroEvalBenchmark):
     def __init__(
         self,
-        tasks: List[str] = ["gsm", "gsm-robust"],
+        tasks: List[str] = ["gsm-clean", "gsm-robust"],
         config: Optional[ZeroEvalConfig] = None,
         max_tokens: Optional[int] = 4096,
         debug: bool = False,
