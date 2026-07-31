@@ -116,7 +116,7 @@ def build_resume_wiring(args: Any, lm: Any) -> Optional[Any]:
     world_size, rank = _world_rank(lm)
 
     margs = _parse_model_args(getattr(args, "model_args", "") or "")
-    model_repo = margs.get("pretrained") or getattr(args, "model_name", None)
+    model_repo = margs.get("pretrained") or margs.get("model") or getattr(args, "model_name", None)
     revision = margs.get("revision")
     model_revision = resolve_model_revision(model_repo, revision, allow_network=False)
     # Evalchemy's canonical CLI writes ``max_length``.  Keep the older vLLM
