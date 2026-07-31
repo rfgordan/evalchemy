@@ -9,3 +9,4 @@ reka-api
 jsonlines
 together
 fire
+cmudict

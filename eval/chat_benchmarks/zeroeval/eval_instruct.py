@@ -24,6 +24,7 @@ class ZeroEvalConfig:
     end_index: int = -1
 
 
+
 class ZeroEvalBenchmark(BaseBenchmark):
     """
     ZeroEval benchmark for a number of tasks and benchmarks.
@@ -48,6 +49,8 @@ class ZeroEvalBenchmark(BaseBenchmark):
         """
         Load dataset for ZeroEval tasks.
         """
+        if data_name == "gsm-robust":
+            return self._load_gsm_robust()
         try:
             chat_history = []
             id_strs = []
@@ -88,6 +91,78 @@ class ZeroEvalBenchmark(BaseBenchmark):
         except Exception as e:
             self.logger.error(f"Error loading dataset for task {data_name}: {e}")
             raise e
+
+
+
+    @staticmethod
+    def _gsm_robust_breakdown(parsed_results: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Per-condition accuracy over all items and over actually-changed
+        items (no-ops otherwise dilute the delta), plus the recoverable
+        spoken-number slice for the homophone condition."""
+        by_condition: Dict[str, List[Dict[str, Any]]] = {}
+        for item in parsed_results:
+            by_condition.setdefault(item["condition"], []).append(item)
+
+        def acc(items: List[Dict[str, Any]]) -> float:
+            return 100.0 * sum(1 for i in items if i["matched"] is True) / len(items)
+
+        breakdown = {}
+        for condition, items in sorted(by_condition.items()):
+            breakdown[f"gsm-robust:{condition}"] = acc(items)
+            changed = [i for i in items if i.get("changed")]
+            if changed and len(changed) != len(items):
+                breakdown[f"gsm-robust:{condition}_changed_only"] = acc(changed)
+            numword = [i for i in items if i.get("number_words_affected")]
+            if numword:
+                breakdown[f"gsm-robust:{condition}_number_words"] = acc(numword)
+        return breakdown
+
+    def _load_gsm_robust(self) -> Tuple[List[str], List[str], List[Dict[str, Any]], Dict[str, Any]]:
+        """gsm with seeded meaning-preserving perturbations (marin-community/marin#7776).
+
+        Instances come verbatim from the checked-in static realization
+        (data/gsm_robust.jsonl, produced by data_prep/generate_gsm_robust.py):
+        noise conditions carry a perturbed question; history conditions keep
+        the question verbatim and prepend unrelated GSM8K train-split
+        exchanges (materialized here from stored indices) as prior chat
+        turns. The unmodified `gsm` task is the clean reference.
+        """
+        from datasets import load_dataset as hf_load_dataset
+
+        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gsm_robust.jsonl")
+        with open(data_file) as f:
+            records = [json.loads(line) for line in f]
+        if self.debug:
+            records = records[:10]
+            self.logger.info(f"Debug mode: using {len(records)} instances")
+        train = hf_load_dataset("openai/gsm8k", "main", split="train")
+
+        prompt_generation_args = Namespace(run_name="")
+        chat_history, id_strs, extracted_chats, metadata = [], [], [], {}
+        for record in records:
+            id_strs.append(record["id"])
+            prompt = prompt_generation("gsm", record, prompt_generation_args)
+            history = []
+            for i in record["history_train_indices"] or []:
+                history.append({"role": "user", "content": train[i]["question"]})
+                history.append({"role": "assistant", "content": train[i]["answer"]})
+            extracted_chats.append(history + [{"content": prompt, "role": "user"}])
+            chat_history.append([prompt])
+            for key, value in record.items():
+                if key == "history_train_indices":
+                    key, value = "history_messages", 2 * len(value or [])
+                metadata.setdefault(key, []).append(value)
+
+        self.logger.info(f"Finished loading gsm-robust: {len(id_strs)} instances.")
+        if self.config.end_index < 0:
+            self.config.end_index = len(id_strs)
+        slice_range = slice(self.config.start_index, self.config.end_index)
+        return (
+            id_strs[slice_range],
+            chat_history[slice_range],
+            extracted_chats[slice_range],
+            {k: v[slice_range] for k, v in metadata.items()},
+        )
 
     def generate_responses(self, model: LM) -> Dict[str, Any]:
         """
@@ -182,9 +257,12 @@ class ZeroEvalBenchmark(BaseBenchmark):
                     eval_results[f"{task}_cell_acc"] = float(result["Cell Acc"])
                 else:
                     # Handle other tasks (numersense-v2, crux, math-l5)
-                    eval_func = math_eval_model if task in ["numersense-v2", "math-l5"] else crux_eval_model
-                    result, _ = eval_func("%", filepath)
+                    math_tasks = ["numersense-v2", "math-l5", "gsm", "gsm-robust"]
+                    eval_func = math_eval_model if task in math_tasks else crux_eval_model
+                    result, parsed_results = eval_func("%", filepath)
                     eval_results[task] = float(result["Acc"])
+                    if task == "gsm-robust":
+                        eval_results.update(self._gsm_robust_breakdown(parsed_results))
 
                 # Common metrics for all tasks
                 eval_results[f"{task}_no_answer"] = float(result["No answer"])
