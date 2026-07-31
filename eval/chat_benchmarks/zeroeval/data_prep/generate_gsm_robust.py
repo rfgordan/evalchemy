@@ -93,12 +93,12 @@ def main() -> None:
                     record = {
                         "id": f"{item['id']}::{condition}",
                         "condition": condition,
-                        "robust_seed": meta["robust_seed"],
+                        "robust_seed": meta.robust_seed,
                         "original_question": item["question"],
-                        "question": meta["text"],
+                        "question": meta.text,
                         "answer": item["answer"],
-                        "changed": meta["changed"],
-                        "number_words_affected": meta["number_words_affected"],
+                        "changed": meta.changed,
+                        "number_words_affected": meta.number_words_affected,
                         "history_train_indices": None,
                         "history_exchanges": None,
                     }

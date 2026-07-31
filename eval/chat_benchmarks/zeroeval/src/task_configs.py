@@ -9,7 +9,7 @@ def mapping_task_names(data_name):
     id_name = "id"
     if data_name == "mmlu-redux":
         dataset = load_dataset("yuchenlin/zero-eval", "mmlu-redux", split="test")
-    elif data_name in ("gsm", "gsm-robust"):
+    elif data_name == "gsm":
         dataset = load_dataset("yuchenlin/zero-eval", "gsm", split="test")
     elif data_name == "zebra-grid":
         dataset = load_dataset("allenai/ZebraLogicBench", "grid_mode", split="test")
@@ -36,7 +36,7 @@ def prompt_generation(data_name, data_item, args):
         prompt = data_item["instruction"]
     elif data_name in ["zebra-grid"]:
         prompt = apply_lgp_grid_template(data_item)
-    elif data_name in ["gsm", "gsm-robust", "math-l5"]:
+    elif data_name in ["gsm", "math-l5"]:
         question_key = "question"
         if data_name == "math-l5":
             question_key = "problem"

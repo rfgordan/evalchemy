@@ -285,7 +285,7 @@ class ZeroEvalBenchmark(BaseBenchmark):
                     eval_results[task] = float(result["Puzzle Acc"])
                     eval_results[f"{task}_cell_acc"] = float(result["Cell Acc"])
                 else:
-                    # Handle other tasks (numersense-v2, crux, math-l5)
+                    # Route math-graded and crux-graded tasks
                     math_tasks = ["numersense-v2", "math-l5", "gsm", "gsm-clean", "gsm-robust"]
                     eval_func = math_eval_model if task in math_tasks else crux_eval_model
                     result, parsed_results = eval_func("%", filepath)

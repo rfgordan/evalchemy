@@ -8,13 +8,13 @@ pronunciation matches. History conditions prepend seeded, unrelated GSM8K
 train-split exchanges as prior chat turns.
 
 Only the question text is perturbed; templates, answer-format instructions,
-and anything the extractor keys on are never touched. Every instance carries
-metadata (condition, seed, changed, number_words_affected) so scoring can
-separate real perturbations from no-ops.
+and anything the extractor keys on are never touched.
 
-marin-community/marin#7090 item 16; design in marin-community/marin#7776.
+Design: marin-community/marin#7776 (part of marin-community/marin#7090).
 """
 
+import dataclasses
+import functools
 import json
 import re
 from pathlib import Path
@@ -240,26 +240,23 @@ NUMBER_WORDS = {
     "ate",
 }
 _WORD_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
-_HOMOPHONE_MAP: dict = {}
 
 
+@functools.cache
 def _homophone_map() -> dict:
     """word -> [exact homophones], built by inverting CMUdict pronunciations."""
-    if _HOMOPHONE_MAP:
-        return _HOMOPHONE_MAP
     import cmudict  # noqa: PLC0415  (optional dependency, loaded on first use)
 
     by_pron: dict = {}
     for word, pron in cmudict.entries():
         if word.isalpha():
             by_pron.setdefault(tuple(pron), set()).add(word)
+    homophone_map: dict = {}
     for words in by_pron.values():
         if len(words) > 1:
             for w in words:
-                _HOMOPHONE_MAP.setdefault(w, set()).update(words - {w})
-    for w in list(_HOMOPHONE_MAP):
-        _HOMOPHONE_MAP[w] = sorted(_HOMOPHONE_MAP[w])
-    return _HOMOPHONE_MAP
+                homophone_map.setdefault(w, set()).update(words - {w})
+    return {w: sorted(cands) for w, cands in homophone_map.items()}
 
 
 def homophones(text: str, rng: Random, prob: float = 0.1) -> str:
@@ -276,10 +273,10 @@ def homophones(text: str, rng: Random, prob: float = 0.1) -> str:
 
 
 def number_words_affected(original: str, perturbed: str) -> bool:
-    def count(t: str) -> list:
+    def number_word_multiset(t: str) -> list:
         return sorted(w for w in _WORD_RE.findall(t.lower()) if w in NUMBER_WORDS)
 
-    return count(original) != count(perturbed)
+    return number_word_multiset(original) != number_word_multiset(perturbed)
 
 
 NOISE_CONDITIONS = {
@@ -308,30 +305,32 @@ def assign_conditions(n_items: int, seed: int, perturbations_per_item: int = 1) 
     return assigned
 
 
-def perturb_question(question: str, condition: str, seed: int) -> dict:
-    """Apply a noise condition; returns instance metadata for scoring."""
-    text = NOISE_CONDITIONS[condition](question, Random(seed))
-    return {
-        "text": text,
-        "condition": condition,
-        "robust_seed": seed,
-        "changed": text != question,
-        "number_words_affected": number_words_affected(question, text),
-    }
+@dataclasses.dataclass(frozen=True)
+class PerturbedQuestion:
+    """One noise-condition instance plus the metadata scoring slices on.
 
-
-def build_history_messages(train_items: list, item_index: int, n_exchanges: int, seed: int) -> list:
-    """Seeded, nested prior exchanges (question/answer pairs) as chat turns.
-
-    Histories for the same (item, seed) are prefix-nested across lengths so
-    per-item comparisons across history conditions stay paired.
+    `changed` lets scoring separate real perturbations from no-ops (which
+    otherwise dilute per-condition deltas); `number_words_affected` marks
+    recoverable spoken-number swaps for slicing.
     """
-    messages = []
-    for i in history_indices(len(train_items), item_index, n_exchanges, seed):
-        q, a = train_items[i]
-        messages.append({"role": "user", "content": q})
-        messages.append({"role": "assistant", "content": a})
-    return messages
+
+    text: str
+    condition: str
+    robust_seed: int
+    changed: bool
+    number_words_affected: bool
+
+
+def perturb_question(question: str, condition: str, seed: int) -> PerturbedQuestion:
+    """Apply a noise condition; returns the instance record for scoring."""
+    text = NOISE_CONDITIONS[condition](question, Random(seed))
+    return PerturbedQuestion(
+        text=text,
+        condition=condition,
+        robust_seed=seed,
+        changed=text != question,
+        number_words_affected=number_words_affected(question, text),
+    )
 
 
 def history_indices(n_train: int, item_index: int, n_exchanges: int, seed: int) -> list:

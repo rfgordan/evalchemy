@@ -171,7 +171,7 @@ swebench = ["swebench>=3.0.4"]
 wildbench = ["jsonlines", "cohere", "anthropic", "reka-api", "together"]
 alpaca-eval = ["alpaca-eval", "patsy"]
 zeroeval = ["google-generativeai", "cohere", "anthropic", "reka-api", "together"]
-gsm-robust = ["google-generativeai", "cohere", "anthropic", "reka-api", "together", "cmudict"]
+gsm-robust = ["evalchemy[zeroeval]", "cmudict"]
 
 # Empty extras: these benchmark dirs import nothing beyond the lean base (their graders
 # ride on lm-eval[math]/[api], datasets, numpy, transformers, loguru -- all in base), so
